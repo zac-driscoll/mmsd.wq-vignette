@@ -1,0 +1,27 @@
+library(mmsd.wq)
+library(tidyverse)
+
+
+zz <- get_survey_data(start_date = "2020-01-01", end_date = "2021-12-31",
+                      reps = TRUE,
+                      blanks = TRUE)
+
+
+
+zz %>%
+  filter(reading_num < loq
+          &
+           !grepl("J.",result_flag) &
+           reading_val != "ND" ) %>%
+  group_by(survey_num) %>%
+  count()  %>%
+  view()
+
+
+zz %>%
+  filter(survey_num == "RI 1033") %>%
+  view()
+
+
+
+

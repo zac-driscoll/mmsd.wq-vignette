@@ -1,0 +1,461 @@
+```{r setup}
+library(mmsd.wq)
+```
+
+# Get Data
+
+## get_survey_data()
+The core function in mmsd.wq is **get_survey_data**.  This function
+is used to query and process water quality data from the LIMS server. This is 
+done by first creating ODBC connections with relevant databases 
+(e.g LIMS_exchange and FreshwaterMonitoring). Once connected, **get_survey_data** 
+utilizes a SQL function (fFreshwaterMonitoringOpSID) written by Kevin Moore,
+along with other basic SQL queries to retrieve data. R code is used to customize
+queries and to perform post-processing. 
+
+
+
+```{r, echo = FALSE, fig.cap = "Basic Data flow of get_survey_data()"}
+
+DiagrammeR::grViz("digraph {
+  graph [layout = dot, rankdir = TB]
+  
+  node [shape = rectangle]        
+  rec1 [label = 'LIMS_Exchange']
+  rec2 [label = 'fFreshwaterMonitoringOpSID']
+  rec3 [label =  'get_survey_data()']
+  rec4 [label = 'FreshwaterMonitoring']
+  rec5 [label = 'SQL SELECT']
+  rec6 [label = 'Output Data']
+  rec7 [label = 'Proccess Data']
+  
+  # edge definitions with the node IDs
+  rec1 -> rec2 -> rec3
+  rec4 -> rec5 -> rec3
+  rec3 -> rec7
+  rec7 -> rec6
+  }",
+  height = 500)
+
+
+```
+
+
+## ODBC Connections
+
+The *get_survey_data* functions relies on ODBC connections to retrieve
+data from databases. A connection can be made using the *make_dBConnection()*
+function. 
+
+```{r, eval = FALSE}
+#make a connection to the "LIMS_Exchange" database
+LIMS <- make_dBConnection(database = "LIMS")
+
+#make a connection to the "FreshwaterMontoring" database
+freshwater <- make_dBConnection(database = "freshwater")
+
+```
+
+Once connections are made, they can be passed to the *get_survey_data* arguments
+to retrieve data. Both a connection to the "LIMS_Exchange" and 
+"FreshwaterMonitoring" databases are required. 
+
+```{r, eval = FALSE}
+
+wq_data <- get_survey_data(LIMS_con = "LIMS",fw_con = "freshwater",
+                           survey_num = "SS 400")
+
+```
+
+It is best practice to close ODBC connections at the end of every session. This
+can be done using the *odbc* package.
+
+```{r, eval = FALSE}
+
+odbc::dbDisconnect(freshwater)
+odbc::dbDisconnect(LIMS)
+
+```
+
+If database connections are not provided to the *get_survey_function* these
+will be made internally within the function. These connections will be
+closed after making all necessary queries.  As a check, messages will be printed
+indicating that these connections were made then closed. 
+
+```{r}
+
+wq_data <- get_survey_data(survey_num = "SS 400")
+
+
+```
+
+## Output Data
+
+The output of the get_survey_data is a dataframe containing water
+quality data and it's associated meta data. The function works by joining 
+the raw query output returned from the "fFreshwaterMonitoringOpSID" SQL 
+function to internal package lookup tables and tables from SQL databases.
+
+```{r, echo = FALSE}
+
+DT::datatable(wq_data, options = list(
+  pageLength=5, scrollX='400px'))
+```
+
+## Output Data Definitions 
+
+```{r, echo = FALSE}
+
+tibble::tribble(
+  ~field,~description,
+  "sample_sid", "The unique sample id associated with the result",
+  "collection_date","The date the sample was collected",
+  "collection_time","The time the sample was collected",
+  "collection_datetime","The data and time the sample was collected",
+  "year","The year the sample was collected",
+  "month","The month the sample was collected",
+  "site_code","The site code and depth formatted like 'OH-01S'",
+  "sitecode","The site code without depth formatted like 'OH-01'",
+  "depth", "The depth at which a sample was collected ('S','M','B')",
+  "latitude", "The latitude associated with the site",
+  "longitude", "The logitude assocaited with the site",
+  "site_no","A unique site identifer",
+  "site_type", "The site category ('River','Lake','Outfall','Harbor')",
+  "survey_num", "The unique ID for the given survey",
+  "source_code_sid", "The source code identifying the survey type",
+  "survey_type","Name associated with source code",
+  "survey_group","A name that groups survey types together by when they are completed (e.g. Quad Creek)",
+  "water_body","The water body that the site belongs to (e.g. Kinnickinnic River)",
+  "op_sid", "The unique identifier that designates a water quality parameter. Short for Operations ID",
+  "label_name","A short, clean name for a water quality parameter",
+  "parameter","The full name for a water quality parameter",
+  "reading_val","The result for the sample formatted as a character",
+  "reading_num","The result for the sample formatted as a number.  This is typically the result used by FRM staff",
+  "reading_raw","The result for the sample reported by the lab equipment",
+  "hours_dry","The number of hours since the sample site recieved precipiation. Calculated from HACH WIMS",
+  "precip72hr","The inches of precipitation the site has recieved in the last 72 hours. Calculated from HACH WIMS",
+  "high_limit","The upper limit for the site-parameter combo calculated within sample review",
+  "low_limit","The low limit for the site-parameter combo calculated within sample review",
+  "loq", "The Limit of Quantitation" ,
+  "mdl", "The minimum quantification limit",
+  "reading_flag","A binary variable",
+  "result_flag", "Lab flags associated with the sample ",
+  "samplte_type","Orignal, field blank, or field replicate sample",
+  "qa_code_sid", "A binary variable identifying if a sample is Q flagged",
+  "q_flag_description","Any Q flags associated with the sample",
+  "result_entered_datetime", "The date and time the sample was entered into LIMS",
+  "result_comments","Any general comments associated with the sample"
+  ) %>%
+  DT::datatable(options = list(
+  pageLength=5, scrollX='400px'))
+
+
+```
+
+
+### Wide Data
+
+By default, data are returned in long format.  If preferred, data can be returned
+in wide format by specifying **wide = TRUE**.  By the nature of the data,
+some columns will be dropped from the output if the data are formatted wide.
+
+```{r}
+
+wq_data_wide <- get_survey_data(survey_num = "SS 400", wide = TRUE)
+
+```
+
+
+```{r, echo = FALSE}
+DT::datatable(head(wq_data_wide),options = list(
+  pageLength=5, scrollX='400px'))
+```
+
+
+### Raw Data
+
+By setting "raw = TRUE" a user can bypass any post-proccessing and output the
+raw results returned from the "fFreshwaterMonitoring" SQL function. 
+
+
+```{r}
+
+wq_data_raw <- get_survey_data(survey_num = "SS 400", raw = TRUE)
+
+```
+
+
+```{r, echo = FALSE}
+DT::datatable(head(wq_data_raw),options = list(
+  pageLength=5, scrollX='400px'))
+```
+
+## Query Parameters
+
+*get_survey_data* has several arguments that can be used to refine a 
+query. A "start_date" and "end_date", "survey_num", or sample_sid  
+are required.  All other arguments are optional.  Multiple arguments can be 
+used to create a specific query. Built in error checking code limits the user 
+from creating nonsensical queries. The following sections show how to use the 
+different arguments to refine queries. 
+
+### Date Range
+
+The "start_date" and "end_date" arguments can be used to retrieve data
+within a certain date range.  Dates need to be passed as a character object
+and need to be formatted as "YYYY-MM-DD" (e.g. "2020-10-31").  
+
+
+```{r, eval = FALSE}
+#get all data collected in  2020
+wq_data <- get_survey_data(start_date = "2020-01-01",
+                           end_date = "2020-12-31")
+
+ 
+```
+
+### Survey Number
+
+Data for an individual survey can be retrieved by using the *survey_num* 
+argument. The *survey_num*  must be a character string with the 
+survey type (e.g. "OH", "SS", "RR") and it's unique survey number separated 
+by a space. Multiple surveys can be retrieved by concetanting their unique
+survey identifiers. 
+
+```{r, eval = FALSE}
+
+#get all data for SS 400
+wq_data <- get_survey_data(survey_num = "SS 400")
+
+#get data from multiple surveys
+wq_data <- get_survey_data(survey_num = c("SS 400","SS 401", "SS 402"))
+
+```
+
+### Sample SID
+The sample_sid argument can be used to get data for a specific Sample SID(s).
+Sample SID's need to be passed to the arguement as a character object 
+(e.g. "20003678" ).  Multiple Sample SID's can be passed during a single
+query.
+
+```{r, eval = FALSE}
+
+sample <- get_survey_data(sample_sid = "20003678")
+samples <- get_survey_data(sample_sid = c("20003678","20003679"))
+
+```
+
+### Sites
+
+Data can be retrieved for specific sites using the *site_code* or *sitecode*
+arguments.  The full site identifier, including depth, can be passed to the
+*site_code* argument (e.g. "SS-01S","OH-14B").  Conversely, the site identifier 
+without depth can be passed to the sitecode argument to retrieve all depths
+associated with that site.  For example, passing "OH-01" will retrieve data
+for "OH-01S", "OH-01M", and "OH-01B".   Multiple site identifiers can be 
+passed to either argument to retrieve data for more than one site. 
+
+```{r, eval =  FALSE}
+#get data for site_code "SS-01S" for a given date range
+SS_01S <- get_survey_data(start_date = "2020-01-01", end_date = "2020-12-31",
+                          site_code = "SS-01S")
+
+#get data for sitecode "SS-01".  Data for all three site depths will be
+#returned. 
+SS_01 <- get_survey_data(start_date = "2020-01-01", end_date = "2020-12-31",
+                          sitecode = "SS-01")
+
+
+#get data for SS and OH outfalls. 
+outfall_data <- get_survey_data(
+  start_date = "2020-01-01",
+  end_date = "2020-12-31",
+  sitecode = c("SS-01", "OH-02")
+)
+
+```
+
+### Site Category
+
+Sites are placed into four different categories by FRM staff.  These 
+categories include "River", "Outfall", "Lake", and "Harbor".  Passing
+any of these values to the "site_category" argument will retrieve sites
+with the relevant attribute. 
+
+```{r, eval = FALSE}
+
+#get 2020 outfall data
+outfall2020 <- get_survey_data(start_date = "2020-01-01",
+                             end_date = "2020-12-31",
+                             site_category = "Outfall")
+
+
+#get 2020 lake and harbor data
+lake_michigan_2020 <- get_survey_data(start_date = "2020-01-01",
+                             end_date = "2020-12-31",
+                             site_category = c("Lake","River"))
+
+```
+
+
+### Source Code
+
+Data for given source codes can be retrieved using the *source_code* argument.
+Available source codes with their site codes can be found using the internal 
+lookup table site_code_lookup. Multiple values can be 
+passed to retrieve data for more than one source_code.  
+
+```{r, eval = FALSE}
+
+#get 2020 outer harbor data
+oh2020 <- get_survey_data(start_date = "2020-01-01", end_date = "2020-12-31",
+                          source_code = 900)
+
+#get 2020 Lake Michigan Data (OH,SS,NS)
+oh2020 <- get_survey_data(start_date = "2020-01-01", end_date = "2020-12-31",
+                          source_code = c(900,902,903))
+
+
+```
+
+###  WQ Parameters
+
+Data can be retrieved for specific parameters using the *op_sid* or 
+*param_name* arguments. An operation ID(s) can be passed to the *op_sid* 
+argument.  Available operation ID's can be found in the internal lookup
+table "param_lookup_table".  Parameter names can be passed to the *param_name*
+argument.  The internal vector "parameter_names" can be used to see the 
+available arguments for "param_name". Multiple values can be 
+passed to either argument to retrieve data for more than one parameter. 
+
+```{r, eval = FALSE}
+#get DO data by operations ID for survey SS 400
+DO_data <- get_survey_data(survey_num = "SS 400", op_sid = 182)
+
+#get 2020 turbidity data
+turb2020 <- get_survey_data(start_date = "2020-01-01", end_date = "2020-12-31",
+                           param_name = "Turbid")
+
+#get 2020 bacteria data 
+bac2020 <- get_survey_data(start_date = "2020-01-01", end_date = "2020-12-31",
+                           param_name = c("E_coli","FCMF"))
+
+```
+
+
+### Sample Depth
+
+The *collection_depth* argument can be used to retrieve data from a specified 
+depth only.  Options include "S","M","B".  Multiple depths can be specified.
+
+```{r, eval = FALSE}
+
+#Collect all mid depth data for survey SS 400
+surface_data <- get_survey_data(survey_num = "SS 400", collection_depth = "M")
+
+
+```
+
+
+### Blanks and Replicates
+
+By default blanks and replicates are not included in output data.  
+The arguments *blanks* and/or *reps* can be set to TRUE include either. Likewise,
+the argument orig_samples can be set to FALSE to exclude original samples
+(non QA/QC). 
+
+```{r, eval = FALSE}
+
+#get the blanks and replicates for survey SS 400
+blanks_reps <- get_survey_data(survey_num = "SS 400", blanks = TRUE,
+                               reps = TRUE, orig_samples = FALSE)
+
+
+```
+
+### Flags
+
+Q and M flags are not returned by default.  To return these results,
+m_flag and/or q_flag can be set to TRUE.
+
+```{r, eval = FALSE}
+
+#get all 2020 water quality data - M and Q flags included, 
+flags_included <- get_survey_data(start_date = "2020-01-01", 
+                                  end_date = "2020-12-31",
+                                  q_flag = TRUE,
+                                  m_flag = TRUE)
+
+```
+
+### LOQ
+
+The above_LOQ argument can be set to TRUE to only return data that is above the
+LOQ. This argument is set to FALSE by default. 
+
+```{r, eval = TRUE}
+
+above_LOQ <- get_survey_data(start_date = "2020-01-01", 
+                             end_date = "2020-12-31",
+                             above_LOQ = TRUE)
+
+
+```
+
+
+## Transformations and Calculations
+
+### Data Transformations
+
+The *transformations* argument can be used to apply a mathematical 
+transformation to the reading_num column.  Currently, "log10" and "log"
+transformations are available. 
+
+```{r,eval = FALSE}
+
+wq_data_log10 <- get_survey_data(survey_num = "SS 400", 
+                                 transformation = "log10")
+
+wq_data_log <- get_survey_data(survey_num = "SS 400", 
+                                 transformation = "log")
+                               
+```
+
+### Outliers
+
+Outliers in the output data can be identified by using the *calculate_outliers*
+argument. Methods include *quantile* and *sd*.  The *quantile* method identifies
+mild and extreme outliers using methods outline in SOP 035.  The *sd* method
+if the result is 2 times the standard deviation.  If this argument is used
+a column will be added to the output data identifying which results are 
+outliers. 
+
+```{r, eval = FALSE}
+
+wq_data_quant <- get_survey_data(survey_num = "SS 400", param_name = "DO",
+                                 calculate_outliers = "quantile")
+
+wq_data_quant <- get_survey_data(survey_num = "SS 400", param_name = "DO",
+                                 calculate_outliers = "sd")
+
+
+```
+
+### Handling Non-Detects
+When non-detects (ND's) are reported the value in the *reading_num* field can be
+returned in four different ways.  
+* "zero" - ND's are returned as zeros
+* "half" - ND's are returned as half of their MDL.
+* "MDL" - ND's are returned as the MDL.
+* "remove" - ND's are no returned by the function. 
+Any of these options can be passed to the *MDL_option* argument.  The default
+value for this argument is "half".
+
+```{r, eval = FALSE}
+
+wq_data <- get_survey_data(start_date = "2020-01-01", end_date = "2020-12-31",
+                           MDL_option = "zero")
+
+```
+
+
