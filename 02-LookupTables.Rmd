@@ -1,1 +1,72 @@
 # Package Diagram
+
+```{r, echo = FALSE}
+
+DiagrammeR::grViz("
+ digraph function_chart {
+
+  # a 'graph' statement
+  graph [overlap = true, 
+  fontsize = 9,
+  rankdir = LR]
+  
+    # Databases 
+  node [shape = egg,
+        fontname = Helvetica]
+  LIMS_Ex; FWM; LIMS
+
+  #Lookup Tables
+    node [shape = box,
+        fontname = Helvetica]
+  site_lu; param_lu
+
+  # Query Functions
+  node [shape = circle,
+        color = red,
+        fontname = Helvetica]
+  dbConnect; get_data
+  
+    # Proccessing Functions
+  node [shape = circle,
+        color = red,
+        fontname = Helvetica]
+  process
+  
+  # Data Proccessing
+  node [shape = circle,
+        fixedsize = true,
+        color = red,
+        width = 0.9] // sets as circles
+  map;plot; calc_qa; 
+  
+    # Shiny module
+  node [shape = circle,
+        fixedsize = true,
+        color = blue,
+        width = 0.9] // sets as circles
+  qa_ui;qa_server;qa_module
+  frm_app
+
+  # several 'edge' statements
+  LIMS_Ex -> dbConnect
+  LIMS -> dbConnect
+  FWM -> dbConnect
+  dbConnect -> site_lu
+  dbConnect -> param_lu
+  dbConnect -> get_data
+  site_lu -> get_data
+  param_lu -> get_data
+  get_data -> process
+  process  -> map
+  process -> plot
+  process -> calc_qa
+  calc_qa -> qa_server
+  qa_server -> qa_module
+  qa_ui -> qa_module
+  qa_module -> frm_app
+
+  
+}
+")
+
+```

@@ -30,7 +30,7 @@ set in the _output.yml file.</p>" />
 <meta name="author" content="Zac Driscoll" />
 
 
-<meta name="date" content="2021-12-01" />
+<meta name="date" content="2021-12-03" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -208,6 +208,8 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
             <section class="normal" id="section-">
 <div id="package-diagram" class="section level1">
 <h1><span class="header-section-number">Chapter 3</span> Package Diagram</h1>
+<div id="htmlwidget-0aeec511507cb19c298b" style="width:672px;height:480px;" class="grViz html-widget"></div>
+<script type="application/json" data-for="htmlwidget-0aeec511507cb19c298b">{"x":{"diagram":"\n digraph function_chart {\n\n  # a \"graph\" statement\n  graph [overlap = true, \n  fontsize = 9,\n  rankdir = LR]\n  \n    # Databases \n  node [shape = egg,\n        fontname = Helvetica]\n  LIMS_Ex; FWM; LIMS\n\n  #Lookup Tables\n    node [shape = box,\n        fontname = Helvetica]\n  site_lu; param_lu\n\n  # Query Functions\n  node [shape = circle,\n        color = red,\n        fontname = Helvetica]\n  dbConnect; get_data\n  \n    # Proccessing Functions\n  node [shape = circle,\n        color = red,\n        fontname = Helvetica]\n  process\n  \n  # Data Proccessing\n  node [shape = circle,\n        fixedsize = true,\n        color = red,\n        width = 0.9] // sets as circles\n  map;plot; calc_qa; \n  \n    # Shiny module\n  node [shape = circle,\n        fixedsize = true,\n        color = blue,\n        width = 0.9] // sets as circles\n  qa_ui;qa_server;qa_module\n  frm_app\n\n  # several \"edge\" statements\n  LIMS_Ex -> dbConnect\n  LIMS -> dbConnect\n  FWM -> dbConnect\n  dbConnect -> site_lu\n  dbConnect -> param_lu\n  dbConnect -> get_data\n  site_lu -> get_data\n  param_lu -> get_data\n  get_data -> process\n  process  -> map\n  process -> plot\n  process -> calc_qa\n  calc_qa -> qa_server\n  qa_server -> qa_module\n  qa_ui -> qa_module\n  qa_module -> frm_app\n\n  \n}\n","config":{"engine":"dot","options":null}},"evals":[],"jsHooks":[]}</script>
 
 </div>
             </section>
